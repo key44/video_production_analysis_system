@@ -146,9 +146,10 @@
                 </div>
                 <div class="h-80 md:h-1/2 bg-white rounded-lg shadow-md p-4 flex flex-col">
                     <div class="flex justify-between items-center mb-2 border-b">
-                        <div class="flex -mb-px">
+                        <div class="flex items-center gap-4 -mb-px">
                             <button id="list-tab" class="py-2 px-4 tab-active">リスト</button>
                             <button id="graph-tab" class="py-2 px-4">グラフ</button>
+                            <span id="graph-total-count" class="hidden text-sm font-semibold text-gray-600"></span>
                         </div>
                         <button id="export-csv" class="text-sm bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-1 px-3 rounded-lg transition duration-300">CSV出力</button>
                     </div>
@@ -216,6 +217,7 @@
         const sourceSelectionArea = document.getElementById('source-selection-area');
         const playbackControls = document.getElementById('playback-controls');
         const notificationBanner = document.getElementById('notification-banner');
+        const graphTotalCountEl = document.getElementById('graph-total-count');
 
         // --- 初期化 ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -227,8 +229,16 @@
         // --- レンダリング & 表示更新 ---
         function updateViews() {
             renderTimestamps();
-            renderChart();
+            updateGraphData();
         }
+
+        function updateGraphData() {
+            graphTotalCountEl.textContent = `合計: ${timestamps.length} 回`;
+            if (!document.getElementById('graph-view').classList.contains('hidden')) {
+                renderChart();
+            }
+        }
+
 
         function renderTaskButtons() {
             taskButtonsContainer.innerHTML = '';
@@ -317,6 +327,19 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw || 0;
+                                    const total = context.chart.data.datasets[0].data.reduce((sum, val) => sum + val, 0);
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                    return `${label}: ${value}回 (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
                 }
             });
         }
@@ -356,11 +379,13 @@
                 graphTab.classList.remove('tab-active');
                 listView.classList.remove('hidden');
                 graphView.classList.add('hidden');
+                graphTotalCountEl.classList.add('hidden');
             } else { // graph
                 graphTab.classList.add('tab-active');
                 listTab.classList.remove('tab-active');
                 graphView.classList.remove('hidden');
                 listView.classList.add('hidden');
+                graphTotalCountEl.classList.remove('hidden');
                 renderChart();
             }
         }
@@ -410,7 +435,6 @@
             const currentTime = unifiedGetCurrentTime();
             if (currentTime === null) { showTemporaryMessage('動画が読み込まれていません。'); return; }
             
-            // 重複チェック
             if (timestamps.some(ts => ts.time === currentTime)) {
                 showTemporaryMessage('この時間にはすでに登録されています。');
                 return;
