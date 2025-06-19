@@ -65,6 +65,10 @@
             color: #4f46e5;
             font-weight: 600;
         }
+        /* 通知バナーのスタイル */
+        #notification-banner {
+            transition: opacity 0.3s ease-in-out;
+        }
     </style>
     <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
 </head>
@@ -149,16 +153,16 @@
                         <button id="export-csv" class="text-sm bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-1 px-3 rounded-lg transition duration-300">CSV出力</button>
                     </div>
                     <!-- リスト表示 -->
-                    <div id="list-view">
-                        <div class="grid grid-cols-4 text-sm font-bold text-gray-500 px-2 pb-1 border-b">
+                    <div id="list-view" class="flex-grow flex flex-col overflow-hidden">
+                        <div class="grid grid-cols-4 text-sm font-bold text-gray-500 px-2 pb-1 border-b flex-shrink-0">
                             <span>再生時間</span>
                             <span class="col-span-2">作業内容</span>
                             <span class="text-right">操作</span>
                         </div>
-                        <ul id="timestamp-list" class="flex-grow overflow-y-auto divide-y divide-gray-200 mt-2 pr-2 h-56"></ul>
+                        <ul id="timestamp-list" class="flex-grow overflow-y-auto divide-y divide-gray-200 mt-2 pr-2"></ul>
                     </div>
                     <!-- グラフ表示 -->
-                    <div id="graph-view" class="hidden h-full flex items-center justify-center">
+                    <div id="graph-view" class="hidden flex-grow relative">
                         <canvas id="task-chart"></canvas>
                     </div>
                 </div>
@@ -180,6 +184,9 @@
             </div>
         </div>
     </div>
+    
+    <!-- 通知バナー -->
+    <div id="notification-banner" class="hidden fixed bottom-5 right-5 bg-red-600 text-white py-2 px-4 rounded-lg shadow-lg opacity-0"></div>
 
 
     <script src="https://www.youtube.com/iframe_api"></script>
@@ -208,6 +215,7 @@
         const editTasksModal = document.getElementById('edit-tasks-modal');
         const sourceSelectionArea = document.getElementById('source-selection-area');
         const playbackControls = document.getElementById('playback-controls');
+        const notificationBanner = document.getElementById('notification-banner');
 
         // --- 初期化 ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -272,16 +280,18 @@
         function renderChart() {
             const ctx = document.getElementById('task-chart').getContext('2d');
             
-            // データを集計
             const counts = {};
             timestamps.forEach(ts => {
                 counts[ts.task] = (counts[ts.task] || 0) + 1;
             });
 
-            const labels = Object.keys(counts);
-            const data = Object.values(counts);
+            const sortedData = Object.entries(counts)
+                .map(([label, count]) => ({ label, count }))
+                .sort((a, b) => b.count - a.count);
+
+            const labels = sortedData.map(item => item.label);
+            const data = sortedData.map(item => item.count);
             
-            // 色のマッピング
             const colorMap = tasks.reduce((acc, task) => {
                 acc[task.name] = `hsl(${task.color === 'blue' ? 220 : task.color === 'green' ? 140 : task.color === 'yellow' ? 50 : task.color === 'red' ? 0 : task.color === 'purple' ? 270 : 200}, 60%, 60%)`;
                 return acc;
@@ -330,7 +340,6 @@
             document.getElementById('add-new-task-btn').addEventListener('click', addNewTaskInModal);
             document.addEventListener('keydown', handleGlobalKeyDown);
             document.getElementById('local-file-input').addEventListener('change', loadLocalVideo);
-            // タブ切り替え
             document.getElementById('list-tab').addEventListener('click', () => switchAnalysisView('list'));
             document.getElementById('graph-tab').addEventListener('click', () => switchAnalysisView('graph'));
         }
@@ -352,7 +361,7 @@
                 listTab.classList.remove('tab-active');
                 graphView.classList.remove('hidden');
                 listView.classList.add('hidden');
-                renderChart(); // グラフ表示時に再描画
+                renderChart();
             }
         }
         
@@ -376,17 +385,37 @@
         }
         function unifiedSkip(forward) {
             const skipSeconds = parseFloat(skipTimeInput.value);
-            if (isNaN(skipSeconds) || skipSeconds <= 0) { alert('有効な秒数を入力してください。'); return; }
+            if (isNaN(skipSeconds) || skipSeconds <= 0) { showTemporaryMessage('有効な秒数を入力してください。'); return; }
             const currentTime = unifiedGetCurrentTime();
-            if (currentTime === null) { alert('動画が読み込まれていません。'); return; }
+            if (currentTime === null) { showTemporaryMessage('動画が読み込まれていません。'); return; }
             const newTime = forward ? currentTime + skipSeconds : currentTime - skipSeconds;
             unifiedSeekTo(newTime);
         }
 
         // --- イベントハンドラ ---
+        let notificationTimeout;
+        function showTemporaryMessage(message, duration = 3000) {
+            if (notificationTimeout) clearTimeout(notificationTimeout);
+            notificationBanner.textContent = message;
+            notificationBanner.classList.remove('hidden', 'opacity-0');
+            notificationBanner.classList.add('opacity-100');
+            notificationTimeout = setTimeout(() => {
+                notificationBanner.classList.remove('opacity-100');
+                notificationBanner.classList.add('opacity-0');
+                setTimeout(() => { notificationBanner.classList.add('hidden'); }, 300);
+            }, duration);
+        }
+
         function addTimestamp(taskName) {
             const currentTime = unifiedGetCurrentTime();
-            if (currentTime === null) { alert('動画が読み込まれていません。'); return; }
+            if (currentTime === null) { showTemporaryMessage('動画が読み込まれていません。'); return; }
+            
+            // 重複チェック
+            if (timestamps.some(ts => ts.time === currentTime)) {
+                showTemporaryMessage('この時間にはすでに登録されています。');
+                return;
+            }
+
             const newTimestamp = { id: timestampIdCounter++, time: currentTime, task: taskName };
             timestamps.push(newTimestamp);
             timestamps.sort((a, b) => b.time - a.time);
@@ -434,7 +463,7 @@
                     playerVars: { 'playsinline': 1, 'rel': 0 },
                 });
             } else {
-                alert('有効なYouTubeのURLを入力してください。');
+                showTemporaryMessage('有効なYouTubeのURLを入力してください。');
             }
         }
         function loadLocalVideo(event) {
@@ -459,7 +488,7 @@
 
         // --- プロジェクト保存/読込 ---
         function saveProject() {
-            if (!activePlayerType) { alert('分析する動画を読み込んでください。'); return; }
+            if (!activePlayerType) { showTemporaryMessage('分析する動画を読み込んでください。'); return; }
             const title = projectTitleInput.value.trim() || '無題のプロジェクト';
             const sanitizedTitle = title.replace(/[/\\?%*:|"<>]/g, '_');
             const projectData = {
@@ -510,9 +539,9 @@
                              playerPlaceholder.style.display = 'block';
                         }
                     }
-                    alert('プロジェクトを読み込みました。');
+                    showTemporaryMessage('プロジェクトを読み込みました。', 2000);
                 } catch (error) {
-                    alert('ファイルの読み込みに失敗しました。');
+                    showTemporaryMessage('ファイルの読み込みに失敗しました。');
                     console.error("Project load error:", error);
                 }
             };
@@ -522,7 +551,7 @@
         
         // --- CSV出力 ---
         function exportToCsv() {
-            if (timestamps.length === 0) { alert('エクスポートするデータがありません。'); return; }
+            if (timestamps.length === 0) { showTemporaryMessage('エクスポートするデータがありません。'); return; }
             timestamps.sort((a, b) => b.time - a.time);
             let csvContent = '"再生時間(HH:MM:SS)","作業内容"\n';
             timestamps.forEach(ts => {
