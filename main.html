@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>動画生産分析システム</title>
+    <!-- Tailwind CSSの読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* カスタムスタイル */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* スクロールバーのスタイル */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* プレーヤーコンテナ */
+        #player-container {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%; /* 16:9 アスペクト比 */
+            height: 0;
+            background-color: black;
+        }
+        #yt-player, #local-video-player, #player-placeholder {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        /* ファイル入力は非表示にする */
+        #load-project-input, #local-file-input {
+            display: none;
+        }
+        /* モーダル用のスタイル */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+    </style>
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <!-- 全体を囲むコンテナ -->
+    <div class="flex flex-col h-screen">
+        <!-- ヘッダー -->
+        <header class="bg-white shadow-md p-4 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-4">
+            <div class="flex items-center gap-3 w-full sm:w-auto flex-grow">
+                 <h1 class="text-xl font-bold text-gray-700 whitespace-nowrap">動画生産分析システム</h1>
+                 <input type="text" id="project-title" class="w-full p-2 border border-gray-300 rounded-md" placeholder="プロジェクト題名を入力">
+            </div>
+            <div class="flex gap-2 flex-shrink-0 flex-wrap justify-center">
+                <button id="new-project-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-300">新規プロジェクト</button>
+                <button id="save-project" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-300">プロジェクトを保存</button>
+                <label for="load-project-input" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-300 cursor-pointer">プロジェクトを読込</label>
+                <input type="file" id="load-project-input" accept=".json">
+            </div>
+        </header>
+
+        <!-- メインコンテンツエリア -->
+        <main class="flex-grow flex flex-col md:flex-row p-4 gap-4 overflow-auto">
+
+            <!-- 左側: 動画表示エリア -->
+            <div class="w-full md:w-2/3 flex flex-col bg-white rounded-lg shadow-md">
+                <div id="player-container" class="rounded-t-lg">
+                    <div id="yt-player"></div>
+                    <video id="local-video-player" class="hidden" controls></video>
+                    <div id="player-placeholder" class="inset-0 flex items-center justify-center text-white text-center">
+                        <p>動画ソースを選択してください。</p>
+                    </div>
+                </div>
+                <div class="p-4 border-t border-gray-200 space-y-4">
+                    <!-- 動画ソース選択エリア -->
+                    <div id="source-selection-area">
+                         <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+                            <!-- YouTube URL入力 -->
+                            <div id="youtube-input-area" class="flex items-center gap-2 flex-grow w-full sm:w-auto">
+                                <input type="text" id="youtube-url" class="flex-grow p-2 border border-gray-300 rounded-md" placeholder="YouTube動画のURLを入力">
+                                <button id="load-video" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 whitespace-nowrap">読込</button>
+                            </div>
+                        
+                            <span id="source-separator" class="font-bold text-gray-400">OR</span>
+                        
+                            <!-- ローカルファイル選択 -->
+                            <div id="local-input-area" class="w-full sm:w-auto">
+                                <label for="local-file-input" class="w-full sm:w-auto inline-block bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 cursor-pointer text-center">ローカル動画ファイルを選択</label>
+                                <input type="file" id="local-file-input" accept="video/mp4,video/quicktime,video/webm">
+                            </div>
+                        </div>
+                        <p id="local-file-name" class="p-2 text-gray-600 truncate text-center sm:text-left"></p>
+                    </div>
+
+                    <!-- 再生コントロール -->
+                    <div id="playback-controls" class="hidden flex items-center justify-between gap-4">
+                         <div class="flex gap-2">
+                            <button id="play-video" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">再生</button>
+                            <button id="pause-video" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">一時停止</button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="skip-backward" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg transition duration-300">&lt;&lt;</button>
+                            <input type="number" id="skip-time" class="w-20 p-2 border border-gray-300 rounded-md text-center" value="10">
+                            <span class="text-sm font-medium text-gray-600">秒</span>
+                            <button id="skip-forward" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg transition duration-300">&gt;&gt;</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右側: 操作エリア -->
+            <div class="w-full md:w-1/3 flex flex-col gap-4">
+                <div class="h-80 md:h-1/2 bg-white rounded-lg shadow-md p-4 flex flex-col">
+                    <h2 class="text-lg font-semibold mb-3 border-b pb-2">作業項目</h2>
+                    <div id="task-buttons-container" class="flex-grow overflow-y-auto pr-2"></div>
+                    <div class="pt-3 border-t mt-3">
+                        <button id="edit-tasks-btn" class="text-sm text-blue-500 hover:underline">作業項目を編集</button>
+                    </div>
+                </div>
+                <div class="h-80 md:h-1/2 bg-white rounded-lg shadow-md p-4 flex flex-col">
+                    <div class="flex justify-between items-center mb-3 border-b pb-2">
+                        <h2 class="text-lg font-semibold">タイムスタンプ</h2>
+                        <button id="export-csv" class="text-sm bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-1 px-3 rounded-lg transition duration-300">CSV出力</button>
+                    </div>
+                    <div class="grid grid-cols-4 text-sm font-bold text-gray-500 px-2 pb-1 border-b">
+                        <span>再生時間</span>
+                        <span class="col-span-2">作業内容</span>
+                        <span class="text-right">操作</span>
+                    </div>
+                    <ul id="timestamp-list" class="flex-grow overflow-y-auto divide-y divide-gray-200 mt-2 pr-2"></ul>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- 作業項目編集モーダル -->
+    <div id="edit-tasks-modal" class="modal-overlay hidden">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+            <div class="p-4 border-b"><h3 class="text-xl font-semibold">作業項目の編集</h3></div>
+            <div id="modal-tasks-list" class="p-4 max-h-96 overflow-y-auto space-y-2"></div>
+            <div class="p-4 border-t space-y-2">
+                 <button id="add-new-task-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">新しい作業を追加</button>
+            </div>
+            <div class="p-4 flex justify-end gap-2 bg-gray-50 rounded-b-lg">
+                <button id="cancel-tasks-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300">キャンセル</button>
+                <button id="save-tasks-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">保存</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script>
+        // --- グローバル変数 ---
+        let ytPlayer;
+        let localPlayer;
+        let activePlayerType = null; // 'youtube' or 'local' or null
+        let tasks = [
+            { name: '作業 A', color: 'blue', shortcut: 'a' }, { name: '作業 B', color: 'blue', shortcut: 's' },
+            { name: '作業 C', color: 'green', shortcut: 'd' }, { name: '作業 D', color: 'green', shortcut: 'f' },
+            { name: '休憩', color: 'yellow', shortcut: 'q' }, { name: 'その他', color: 'gray', shortcut: 'w' }
+        ];
+        let timestamps = [];
+        let timestampIdCounter = 0;
+        let localVideoFileName = '';
+
+        // --- DOM要素 ---
+        const playerPlaceholder = document.getElementById('player-placeholder');
+        const ytPlayerEl = document.getElementById('yt-player');
+        const localVideoPlayerEl = document.getElementById('local-video-player');
+        const taskButtonsContainer = document.getElementById('task-buttons-container');
+        const timestampList = document.getElementById('timestamp-list');
+        const youtubeUrlInput = document.getElementById('youtube-url');
+        const skipTimeInput = document.getElementById('skip-time');
+        const projectTitleInput = document.getElementById('project-title');
+        const editTasksModal = document.getElementById('edit-tasks-modal');
+        const sourceSelectionArea = document.getElementById('source-selection-area');
+        const playbackControls = document.getElementById('playback-controls');
+
+        // --- 初期化 ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTaskButtons();
+            renderTimestamps();
+            addEventListeners();
+        });
+
+        // --- レンダリング ---
+        function renderTaskButtons() {
+            taskButtonsContainer.innerHTML = '';
+            const buttonGrid = document.createElement('div');
+            buttonGrid.className = 'grid grid-cols-2 gap-3';
+            tasks.forEach(task => {
+                const button = document.createElement('button');
+                button.className = `w-full bg-${task.color}-500 hover:bg-${task.color}-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 task-button`;
+                let buttonText = task.name;
+                if (task.shortcut) {
+                    buttonText += ` <span class="bg-white/20 text-xs font-mono rounded px-1.5 py-0.5">${task.shortcut.toUpperCase()}</span>`;
+                }
+                button.innerHTML = buttonText;
+                button.dataset.taskName = task.name;
+                buttonGrid.appendChild(button);
+            });
+            taskButtonsContainer.appendChild(buttonGrid);
+        }
+
+        function renderTimestamps() {
+            timestampList.innerHTML = '';
+            if (timestamps.length === 0) {
+                timestampList.innerHTML = '<li class="p-4 text-center text-gray-500">まだ記録がありません。</li>';
+                return;
+            }
+            timestamps.forEach(ts => {
+                const li = document.createElement('li');
+                li.className = 'py-2 px-2 grid grid-cols-4 items-center hover:bg-gray-50 rounded-md';
+                li.dataset.id = ts.id;
+                const timeSpan = document.createElement('span');
+                timeSpan.textContent = formatTime(ts.time);
+                timeSpan.className = 'clickable-time cursor-pointer hover:text-blue-600 hover:underline';
+                const taskSpan = document.createElement('span');
+                taskSpan.className = 'col-span-2';
+                taskSpan.textContent = ts.task;
+                const controlsDiv = document.createElement('div');
+                controlsDiv.className = 'flex justify-end';
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = '削除';
+                deleteButton.className = 'text-xs text-red-500 hover:underline delete-btn';
+                controlsDiv.appendChild(deleteButton);
+                li.appendChild(timeSpan);
+                li.appendChild(taskSpan);
+                li.appendChild(controlsDiv);
+                timestampList.appendChild(li);
+            });
+        }
+        
+        // --- イベントリスナー ---
+        function addEventListeners() {
+            document.getElementById('new-project-btn').addEventListener('click', () => { window.location.reload(); });
+            document.getElementById('save-project').addEventListener('click', saveProject);
+            document.getElementById('load-project-input').addEventListener('change', loadProject);
+            document.getElementById('export-csv').addEventListener('click', exportToCsv);
+            document.getElementById('load-video').addEventListener('click', loadYouTubeVideo);
+            document.getElementById('play-video').addEventListener('click', unifiedPlay);
+            document.getElementById('pause-video').addEventListener('click', unifiedPause);
+            document.getElementById('skip-backward').addEventListener('click', () => unifiedSkip(false));
+            document.getElementById('skip-forward').addEventListener('click', () => unifiedSkip(true));
+            taskButtonsContainer.addEventListener('click', handleTaskButtonClick);
+            timestampList.addEventListener('click', handleTimestampListClick);
+            document.getElementById('edit-tasks-btn').addEventListener('click', openEditTasksModal);
+            document.getElementById('cancel-tasks-btn').addEventListener('click', closeEditTasksModal);
+            document.getElementById('save-tasks-btn').addEventListener('click', saveTasksFromModal);
+            document.getElementById('add-new-task-btn').addEventListener('click', addNewTaskInModal);
+            document.addEventListener('keydown', handleGlobalKeyDown);
+            document.getElementById('local-file-input').addEventListener('change', loadLocalVideo);
+        }
+        
+        // --- 統合プレーヤーコントロール ---
+        function unifiedPlay() {
+            if (activePlayerType === 'youtube' && ytPlayer) ytPlayer.playVideo();
+            else if (activePlayerType === 'local' && localVideoPlayerEl) localVideoPlayerEl.play();
+        }
+        function unifiedPause() {
+            if (activePlayerType === 'youtube' && ytPlayer) ytPlayer.pauseVideo();
+            else if (activePlayerType === 'local' && localVideoPlayerEl) localVideoPlayerEl.pause();
+        }
+        function unifiedGetCurrentTime() {
+            if (activePlayerType === 'youtube' && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') return ytPlayer.getCurrentTime();
+            if (activePlayerType === 'local' && localVideoPlayerEl) return localVideoPlayerEl.currentTime;
+            return null;
+        }
+        function unifiedSeekTo(time) {
+            if (activePlayerType === 'youtube' && ytPlayer && typeof ytPlayer.seekTo === 'function') ytPlayer.seekTo(time, true);
+            if (activePlayerType === 'local' && localVideoPlayerEl) localVideoPlayerEl.currentTime = time;
+        }
+        function unifiedSkip(forward) {
+            const skipSeconds = parseFloat(skipTimeInput.value);
+            if (isNaN(skipSeconds) || skipSeconds <= 0) { alert('有効な秒数を入力してください。'); return; }
+            const currentTime = unifiedGetCurrentTime();
+            if (currentTime === null) { alert('動画が読み込まれていません。'); return; }
+            const newTime = forward ? currentTime + skipSeconds : currentTime - skipSeconds;
+            unifiedSeekTo(newTime);
+        }
+
+        // --- イベントハンドラ ---
+        function addTimestamp(taskName) {
+            const currentTime = unifiedGetCurrentTime();
+            if (currentTime === null) { alert('動画が読み込まれていません。'); return; }
+            const newTimestamp = { id: timestampIdCounter++, time: currentTime, task: taskName };
+            timestamps.push(newTimestamp);
+            timestamps.sort((a, b) => a.time - b.time);
+            renderTimestamps();
+        }
+        function handleTaskButtonClick(event) {
+            const button = event.target.closest('.task-button');
+            if (!button) return;
+            addTimestamp(button.dataset.taskName);
+        }
+        function handleGlobalKeyDown(event) {
+            if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || !editTasksModal.classList.contains('hidden')) return;
+            const pressedKey = event.key.toLowerCase();
+            const targetTask = tasks.find(task => task.shortcut && task.shortcut.toLowerCase() === pressedKey);
+            if (targetTask) { event.preventDefault(); addTimestamp(targetTask.name); }
+        }
+        function handleTimestampListClick(event) {
+            const target = event.target;
+            const li = target.closest('li');
+            if (!li) return;
+            const id = Number(li.dataset.id);
+            if (target.classList.contains('delete-btn')) {
+                timestamps = timestamps.filter(ts => ts.id !== id);
+                renderTimestamps();
+            } else if (target.classList.contains('clickable-time')) {
+                const timestampToSeek = timestamps.find(ts => ts.id === id);
+                if (timestampToSeek) unifiedSeekTo(timestampToSeek.time);
+            }
+        }
+
+        // --- 動画読み込み ---
+        function onYouTubeIframeAPIReady() {}
+        function loadYouTubeVideo() {
+            if (activePlayerType) return;
+            const videoID = extractVideoID(youtubeUrlInput.value);
+            if (videoID) {
+                activePlayerType = 'youtube';
+                sourceSelectionArea.classList.add('hidden');
+                playbackControls.classList.remove('hidden');
+                playerPlaceholder.style.display = 'none';
+                ytPlayerEl.classList.remove('hidden');
+                localVideoPlayerEl.classList.add('hidden');
+                if (ytPlayer) ytPlayer.destroy();
+                ytPlayer = new YT.Player('yt-player', {
+                    height: '100%', width: '100%', videoId: videoID,
+                    playerVars: { 'playsinline': 1, 'rel': 0 },
+                });
+            } else {
+                alert('有効なYouTubeのURLを入力してください。');
+            }
+        }
+        function loadLocalVideo(event) {
+            if (activePlayerType && activePlayerType !== 'local') return;
+            const file = event.target.files[0];
+            if (file) {
+                activePlayerType = 'local';
+                sourceSelectionArea.classList.add('hidden');
+                playbackControls.classList.remove('hidden');
+                playerPlaceholder.style.display = 'none';
+                localVideoFileName = file.name;
+                const fileURL = URL.createObjectURL(file);
+                localVideoPlayerEl.src = fileURL;
+                ytPlayerEl.classList.add('hidden');
+                localVideoPlayerEl.classList.remove('hidden');
+            }
+        }
+        function extractVideoID(url) {
+            const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/ ]{11})/;
+            const match = url.match(regex);
+            return match ? match[1] : null;
+        }
+
+        // --- プロジェクト保存/読込 ---
+        function saveProject() {
+            if (!activePlayerType) { alert('分析する動画を読み込んでください。'); return; }
+            const title = projectTitleInput.value.trim() || '無題のプロジェクト';
+            const sanitizedTitle = title.replace(/[/\\?%*:|"<>]/g, '_');
+            const projectData = {
+                projectTitle: title, activePlayerType,
+                youtubeUrl: youtubeUrlInput.value, localVideoFileName,
+                skipTime: skipTimeInput.value, tasks, timestamps, timestampIdCounter
+            };
+            const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${sanitizedTitle}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function loadProject(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const d = JSON.parse(e.target.result);
+                    projectTitleInput.value = d.projectTitle || '';
+                    youtubeUrlInput.value = d.youtubeUrl || '';
+                    skipTimeInput.value = d.skipTime || 10;
+                    tasks = d.tasks || [];
+                    timestamps = d.timestamps || [];
+                    timestampIdCounter = d.timestampIdCounter || 0;
+                    localVideoFileName = d.localVideoFileName || '';
+                    
+                    timestamps.sort((a, b) => a.time - b.time);
+                    renderTaskButtons();
+                    renderTimestamps();
+                    
+                    activePlayerType = d.activePlayerType;
+                    if(activePlayerType) {
+                        playbackControls.classList.remove('hidden');
+                        if (activePlayerType === 'youtube' && youtubeUrlInput.value) {
+                             loadYouTubeVideo();
+                        } else if (activePlayerType === 'local') {
+                             sourceSelectionArea.classList.remove('hidden');
+                             document.getElementById('local-file-name').textContent = `[読込済: ${localVideoFileName}] 再度同じファイルを選択してください。`;
+                             document.getElementById('youtube-input-area').classList.add('hidden');
+                             document.getElementById('source-separator').classList.add('hidden');
+                             ytPlayerEl.classList.add('hidden');
+                             localVideoPlayerEl.classList.remove('hidden');
+                        }
+                    }
+                    alert('プロジェクトを読み込みました。');
+                } catch (error) {
+                    alert('ファイルの読み込みに失敗しました。');
+                    console.error("Project load error:", error);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+        
+        // --- CSV出力 ---
+        function exportToCsv() {
+            if (timestamps.length === 0) { alert('エクスポートするデータがありません。'); return; }
+            timestamps.sort((a, b) => a.time - b.time);
+            let csvContent = '"再生時間(HH:MM:SS)","作業内容"\n';
+            timestamps.forEach(ts => {
+                csvContent += `${formatTime(ts.time)},"${ts.task.replace(/"/g, '""')}"\n`;
+            });
+            const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+            const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'analysis-data.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // --- ヘルパー関数 ---
+        function formatTime(totalSeconds) {
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = Math.floor(totalSeconds % 60);
+            const pad = (num) => String(num).padStart(2, '0');
+            return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        }
+
+        // --- 作業項目編集モーダル関連の関数群 ---
+        function openEditTasksModal() {
+            const modalList = document.getElementById('modal-tasks-list');
+            modalList.innerHTML = '';
+            tasks.forEach((task, index) => { modalList.appendChild(createTaskEditRow(task, index)); });
+            editTasksModal.classList.remove('hidden');
+        }
+        function closeEditTasksModal() { editTasksModal.classList.add('hidden'); }
+        function createTaskEditRow(task, index) {
+            const div = document.createElement('div');
+            div.className = 'flex items-center gap-2 p-2 border rounded-md';
+            div.dataset.index = index;
+            const shortcutInput = document.createElement('input');
+            shortcutInput.type = 'text';
+            shortcutInput.value = task.shortcut || '';
+            shortcutInput.maxLength = 1;
+            shortcutInput.className = 'w-10 p-1 border border-gray-300 rounded-md text-center modal-task-shortcut';
+            shortcutInput.placeholder = "キー";
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.value = task.name;
+            nameInput.className = 'flex-grow p-1 border border-gray-300 rounded-md modal-task-name';
+            const colorSelect = document.createElement('select');
+            colorSelect.className = 'p-1 border border-gray-300 rounded-md modal-task-color';
+            ['blue', 'green', 'yellow', 'red', 'purple', 'gray'].forEach(color => {
+                const option = document.createElement('option');
+                option.value = color;
+                option.textContent = color;
+                if (color === task.color) option.selected = true;
+                colorSelect.appendChild(option);
+            });
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = '削除';
+            deleteBtn.className = 'bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-2 rounded';
+            deleteBtn.onclick = () => { div.remove(); };
+            div.appendChild(shortcutInput);
+            div.appendChild(nameInput);
+            div.appendChild(colorSelect);
+            div.appendChild(deleteBtn);
+            return div;
+        }
+        function addNewTaskInModal() {
+             const modalList = document.getElementById('modal-tasks-list');
+             const newTask = { name: '新しい作業', color: 'gray', shortcut: '' };
+             modalList.appendChild(createTaskEditRow(newTask, tasks.length));
+        }
+        function saveTasksFromModal() {
+            const modalList = document.getElementById('modal-tasks-list');
+            const newTaskArray = [];
+            const rows = modalList.querySelectorAll('div[data-index]');
+            rows.forEach(row => {
+                const nameInput = row.querySelector('.modal-task-name');
+                const shortcutInput = row.querySelector('.modal-task-shortcut');
+                const colorSelect = row.querySelector('.modal-task-color');
+                if (nameInput.value.trim()) {
+                    newTaskArray.push({ 
+                        name: nameInput.value.trim(), shortcut: shortcutInput.value.trim().toLowerCase(),
+                        color: colorSelect.value 
+                    });
+                }
+            });
+            tasks = newTaskArray;
+            renderTaskButtons();
+            closeEditTasksModal();
+        }
+
+    </script>
+</body>
+</html>
