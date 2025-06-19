@@ -336,7 +336,7 @@
         // --- 動画読み込み ---
         function onYouTubeIframeAPIReady() {}
         function loadYouTubeVideo() {
-            if (activePlayerType) return;
+            // BUGFIX: activePlayerTypeのチェックを削除し、常にプレーヤーを生成できるようにする
             const videoID = extractVideoID(youtubeUrlInput.value);
             if (videoID) {
                 activePlayerType = 'youtube';
@@ -355,10 +355,12 @@
             }
         }
         function loadLocalVideo(event) {
-            if (activePlayerType && activePlayerType !== 'local') return;
             const file = event.target.files[0];
             if (file) {
-                activePlayerType = 'local';
+                // BUGFIX: 最初の読込時以外でも動作するようにする
+                if (!activePlayerType) {
+                    activePlayerType = 'local';
+                }
                 sourceSelectionArea.classList.add('hidden');
                 playbackControls.classList.remove('hidden');
                 playerPlaceholder.style.display = 'none';
@@ -417,16 +419,17 @@
                     
                     activePlayerType = d.activePlayerType;
                     if(activePlayerType) {
-                        playbackControls.classList.remove('hidden');
                         if (activePlayerType === 'youtube' && youtubeUrlInput.value) {
                              loadYouTubeVideo();
                         } else if (activePlayerType === 'local') {
                              sourceSelectionArea.classList.remove('hidden');
+                             playbackControls.classList.add('hidden'); // 再選択されるまで再生ボタンは隠す
                              document.getElementById('local-file-name').textContent = `[読込済: ${localVideoFileName}] 再度同じファイルを選択してください。`;
                              document.getElementById('youtube-input-area').classList.add('hidden');
                              document.getElementById('source-separator').classList.add('hidden');
                              ytPlayerEl.classList.add('hidden');
                              localVideoPlayerEl.classList.remove('hidden');
+                             playerPlaceholder.style.display = 'block';
                         }
                     }
                     alert('プロジェクトを読み込みました。');
