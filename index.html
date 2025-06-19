@@ -6,6 +6,8 @@
     <title>動画生産分析システム</title>
     <!-- Tailwind CSSの読み込み -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.jsの読み込み -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <style>
         /* カスタムスタイル */
         body {
@@ -57,6 +59,12 @@
             justify-content: center;
             z-index: 50;
         }
+        /* アクティブなタブのスタイル */
+        .tab-active {
+            border-bottom: 2px solid #4f46e5;
+            color: #4f46e5;
+            font-weight: 600;
+        }
     </style>
     <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
 </head>
@@ -94,15 +102,11 @@
                     <!-- 動画ソース選択エリア -->
                     <div id="source-selection-area">
                          <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-                            <!-- YouTube URL入力 -->
                             <div id="youtube-input-area" class="flex items-center gap-2 flex-grow w-full sm:w-auto">
                                 <input type="text" id="youtube-url" class="flex-grow p-2 border border-gray-300 rounded-md" placeholder="YouTube動画のURLを入力">
                                 <button id="load-video" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 whitespace-nowrap">読込</button>
                             </div>
-                        
                             <span id="source-separator" class="font-bold text-gray-400">OR</span>
-                        
-                            <!-- ローカルファイル選択 -->
                             <div id="local-input-area" class="w-full sm:w-auto">
                                 <label for="local-file-input" class="w-full sm:w-auto inline-block bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 cursor-pointer text-center">ローカル動画ファイルを選択</label>
                                 <input type="file" id="local-file-input" accept="video/mp4,video/quicktime,video/webm">
@@ -137,16 +141,26 @@
                     </div>
                 </div>
                 <div class="h-80 md:h-1/2 bg-white rounded-lg shadow-md p-4 flex flex-col">
-                    <div class="flex justify-between items-center mb-3 border-b pb-2">
-                        <h2 class="text-lg font-semibold">タイムスタンプ</h2>
+                    <div class="flex justify-between items-center mb-2 border-b">
+                        <div class="flex -mb-px">
+                            <button id="list-tab" class="py-2 px-4 tab-active">リスト</button>
+                            <button id="graph-tab" class="py-2 px-4">グラフ</button>
+                        </div>
                         <button id="export-csv" class="text-sm bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-1 px-3 rounded-lg transition duration-300">CSV出力</button>
                     </div>
-                    <div class="grid grid-cols-4 text-sm font-bold text-gray-500 px-2 pb-1 border-b">
-                        <span>再生時間</span>
-                        <span class="col-span-2">作業内容</span>
-                        <span class="text-right">操作</span>
+                    <!-- リスト表示 -->
+                    <div id="list-view">
+                        <div class="grid grid-cols-4 text-sm font-bold text-gray-500 px-2 pb-1 border-b">
+                            <span>再生時間</span>
+                            <span class="col-span-2">作業内容</span>
+                            <span class="text-right">操作</span>
+                        </div>
+                        <ul id="timestamp-list" class="flex-grow overflow-y-auto divide-y divide-gray-200 mt-2 pr-2 h-56"></ul>
                     </div>
-                    <ul id="timestamp-list" class="flex-grow overflow-y-auto divide-y divide-gray-200 mt-2 pr-2"></ul>
+                    <!-- グラフ表示 -->
+                    <div id="graph-view" class="hidden h-full flex items-center justify-center">
+                        <canvas id="task-chart"></canvas>
+                    </div>
                 </div>
             </div>
         </main>
@@ -171,9 +185,8 @@
     <script src="https://www.youtube.com/iframe_api"></script>
     <script>
         // --- グローバル変数 ---
-        let ytPlayer;
-        let localPlayer;
-        let activePlayerType = null; // 'youtube' or 'local' or null
+        let ytPlayer, localPlayer, taskChart;
+        let activePlayerType = null;
         let tasks = [
             { name: '作業 A', color: 'blue', shortcut: 'a' }, { name: '作業 B', color: 'blue', shortcut: 's' },
             { name: '作業 C', color: 'green', shortcut: 'd' }, { name: '作業 D', color: 'green', shortcut: 'f' },
@@ -199,11 +212,16 @@
         // --- 初期化 ---
         document.addEventListener('DOMContentLoaded', () => {
             renderTaskButtons();
-            renderTimestamps();
+            updateViews();
             addEventListeners();
         });
 
-        // --- レンダリング ---
+        // --- レンダリング & 表示更新 ---
+        function updateViews() {
+            renderTimestamps();
+            renderChart();
+        }
+
         function renderTaskButtons() {
             taskButtonsContainer.innerHTML = '';
             const buttonGrid = document.createElement('div');
@@ -251,6 +269,48 @@
             });
         }
         
+        function renderChart() {
+            const ctx = document.getElementById('task-chart').getContext('2d');
+            
+            // データを集計
+            const counts = {};
+            timestamps.forEach(ts => {
+                counts[ts.task] = (counts[ts.task] || 0) + 1;
+            });
+
+            const labels = Object.keys(counts);
+            const data = Object.values(counts);
+            
+            // 色のマッピング
+            const colorMap = tasks.reduce((acc, task) => {
+                acc[task.name] = `hsl(${task.color === 'blue' ? 220 : task.color === 'green' ? 140 : task.color === 'yellow' ? 50 : task.color === 'red' ? 0 : task.color === 'purple' ? 270 : 200}, 60%, 60%)`;
+                return acc;
+            }, {});
+
+            const backgroundColors = labels.map(label => colorMap[label] || '#cccccc');
+
+            if (taskChart) {
+                taskChart.destroy();
+            }
+
+            taskChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '作業回数',
+                        data: data,
+                        backgroundColor: backgroundColors,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                }
+            });
+        }
+
         // --- イベントリスナー ---
         function addEventListeners() {
             document.getElementById('new-project-btn').addEventListener('click', () => { window.location.reload(); });
@@ -270,6 +330,30 @@
             document.getElementById('add-new-task-btn').addEventListener('click', addNewTaskInModal);
             document.addEventListener('keydown', handleGlobalKeyDown);
             document.getElementById('local-file-input').addEventListener('change', loadLocalVideo);
+            // タブ切り替え
+            document.getElementById('list-tab').addEventListener('click', () => switchAnalysisView('list'));
+            document.getElementById('graph-tab').addEventListener('click', () => switchAnalysisView('graph'));
+        }
+        
+        // --- ビュー切り替え ---
+        function switchAnalysisView(viewName) {
+            const listTab = document.getElementById('list-tab');
+            const graphTab = document.getElementById('graph-tab');
+            const listView = document.getElementById('list-view');
+            const graphView = document.getElementById('graph-view');
+
+            if (viewName === 'list') {
+                listTab.classList.add('tab-active');
+                graphTab.classList.remove('tab-active');
+                listView.classList.remove('hidden');
+                graphView.classList.add('hidden');
+            } else { // graph
+                graphTab.classList.add('tab-active');
+                listTab.classList.remove('tab-active');
+                graphView.classList.remove('hidden');
+                listView.classList.add('hidden');
+                renderChart(); // グラフ表示時に再描画
+            }
         }
         
         // --- 統合プレーヤーコントロール ---
@@ -305,8 +389,8 @@
             if (currentTime === null) { alert('動画が読み込まれていません。'); return; }
             const newTimestamp = { id: timestampIdCounter++, time: currentTime, task: taskName };
             timestamps.push(newTimestamp);
-            timestamps.sort((a, b) => b.time - a.time); // 降順に変更
-            renderTimestamps();
+            timestamps.sort((a, b) => b.time - a.time);
+            updateViews();
         }
         function handleTaskButtonClick(event) {
             const button = event.target.closest('.task-button');
@@ -326,7 +410,7 @@
             const id = Number(li.dataset.id);
             if (target.classList.contains('delete-btn')) {
                 timestamps = timestamps.filter(ts => ts.id !== id);
-                renderTimestamps();
+                updateViews();
             } else if (target.classList.contains('clickable-time')) {
                 const timestampToSeek = timestamps.find(ts => ts.id === id);
                 if (timestampToSeek) unifiedSeekTo(timestampToSeek.time);
@@ -338,7 +422,7 @@
         function loadYouTubeVideo() {
             const videoID = extractVideoID(youtubeUrlInput.value);
             if (videoID) {
-                if (!activePlayerType) activePlayerType = 'youtube'; // 最初の読込時に設定
+                if (!activePlayerType) activePlayerType = 'youtube';
                 sourceSelectionArea.classList.add('hidden');
                 playbackControls.classList.remove('hidden');
                 playerPlaceholder.style.display = 'none';
@@ -356,7 +440,7 @@
         function loadLocalVideo(event) {
             const file = event.target.files[0];
             if (file) {
-                if (!activePlayerType) activePlayerType = 'local'; // 最初の読込時に設定
+                if (!activePlayerType) activePlayerType = 'local';
                 sourceSelectionArea.classList.add('hidden');
                 playbackControls.classList.remove('hidden');
                 playerPlaceholder.style.display = 'none';
@@ -393,7 +477,6 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
-
         function loadProject(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -408,23 +491,20 @@
                     timestamps = d.timestamps || [];
                     timestampIdCounter = d.timestampIdCounter || 0;
                     localVideoFileName = d.localVideoFileName || '';
-                    
-                    timestamps.sort((a, b) => b.time - a.time); // 降順に変更
+                    timestamps.sort((a, b) => b.time - a.time);
                     renderTaskButtons();
-                    renderTimestamps();
-                    
+                    updateViews();
                     activePlayerType = d.activePlayerType;
                     if(activePlayerType) {
                         if (activePlayerType === 'youtube' && youtubeUrlInput.value) {
                              loadYouTubeVideo();
                         } else if (activePlayerType === 'local') {
                              sourceSelectionArea.classList.remove('hidden');
-                             // 再生コントロールを表示し、再選択を促す
                              playbackControls.classList.add('hidden'); 
                              document.getElementById('local-file-name').textContent = `[読込済: ${localVideoFileName}] 再度同じファイルを選択してください。`;
                              document.getElementById('youtube-input-area').classList.add('hidden');
                              document.getElementById('source-separator').classList.add('hidden');
-                             sourceSelectionArea.classList.remove('hidden'); // ローカルファイル選択ボタンを再表示
+                             sourceSelectionArea.classList.remove('hidden');
                              ytPlayerEl.classList.add('hidden');
                              localVideoPlayerEl.classList.remove('hidden');
                              playerPlaceholder.style.display = 'block';
@@ -443,7 +523,7 @@
         // --- CSV出力 ---
         function exportToCsv() {
             if (timestamps.length === 0) { alert('エクスポートするデータがありません。'); return; }
-            timestamps.sort((a, b) => b.time - a.time); // 降順に変更
+            timestamps.sort((a, b) => b.time - a.time);
             let csvContent = '"再生時間(HH:MM:SS)","作業内容"\n';
             timestamps.forEach(ts => {
                 csvContent += `${formatTime(ts.time)},"${ts.task.replace(/"/g, '""')}"\n`;
