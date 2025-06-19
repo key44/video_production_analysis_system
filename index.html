@@ -305,7 +305,7 @@
             if (currentTime === null) { alert('動画が読み込まれていません。'); return; }
             const newTimestamp = { id: timestampIdCounter++, time: currentTime, task: taskName };
             timestamps.push(newTimestamp);
-            timestamps.sort((a, b) => a.time - b.time);
+            timestamps.sort((a, b) => b.time - a.time); // 降順に変更
             renderTimestamps();
         }
         function handleTaskButtonClick(event) {
@@ -336,12 +336,13 @@
         // --- 動画読み込み ---
         function onYouTubeIframeAPIReady() {}
         function loadYouTubeVideo() {
-            // BUGFIX: activePlayerTypeのチェックを削除し、常にプレーヤーを生成できるようにする
             const videoID = extractVideoID(youtubeUrlInput.value);
             if (videoID) {
-                activePlayerType = 'youtube';
-                sourceSelectionArea.classList.add('hidden');
-                playbackControls.classList.remove('hidden');
+                if (!activePlayerType) { // 最初の読込時のみ
+                    activePlayerType = 'youtube';
+                    sourceSelectionArea.classList.add('hidden');
+                    playbackControls.classList.remove('hidden');
+                }
                 playerPlaceholder.style.display = 'none';
                 ytPlayerEl.classList.remove('hidden');
                 localVideoPlayerEl.classList.add('hidden');
@@ -357,12 +358,11 @@
         function loadLocalVideo(event) {
             const file = event.target.files[0];
             if (file) {
-                // BUGFIX: 最初の読込時以外でも動作するようにする
-                if (!activePlayerType) {
+                if (!activePlayerType) { // 最初の読込時のみ
                     activePlayerType = 'local';
+                    sourceSelectionArea.classList.add('hidden');
+                    playbackControls.classList.remove('hidden');
                 }
-                sourceSelectionArea.classList.add('hidden');
-                playbackControls.classList.remove('hidden');
                 playerPlaceholder.style.display = 'none';
                 localVideoFileName = file.name;
                 const fileURL = URL.createObjectURL(file);
@@ -413,7 +413,7 @@
                     timestampIdCounter = d.timestampIdCounter || 0;
                     localVideoFileName = d.localVideoFileName || '';
                     
-                    timestamps.sort((a, b) => a.time - b.time);
+                    timestamps.sort((a, b) => b.time - a.time); // 降順に変更
                     renderTaskButtons();
                     renderTimestamps();
                     
@@ -445,7 +445,7 @@
         // --- CSV出力 ---
         function exportToCsv() {
             if (timestamps.length === 0) { alert('エクスポートするデータがありません。'); return; }
-            timestamps.sort((a, b) => a.time - b.time);
+            timestamps.sort((a, b) => b.time - a.time); // 降順に変更
             let csvContent = '"再生時間(HH:MM:SS)","作業内容"\n';
             timestamps.forEach(ts => {
                 csvContent += `${formatTime(ts.time)},"${ts.task.replace(/"/g, '""')}"\n`;
