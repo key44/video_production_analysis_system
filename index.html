@@ -338,11 +338,9 @@
         function loadYouTubeVideo() {
             const videoID = extractVideoID(youtubeUrlInput.value);
             if (videoID) {
-                if (!activePlayerType) { // 最初の読込時のみ
-                    activePlayerType = 'youtube';
-                    sourceSelectionArea.classList.add('hidden');
-                    playbackControls.classList.remove('hidden');
-                }
+                if (!activePlayerType) activePlayerType = 'youtube'; // 最初の読込時に設定
+                sourceSelectionArea.classList.add('hidden');
+                playbackControls.classList.remove('hidden');
                 playerPlaceholder.style.display = 'none';
                 ytPlayerEl.classList.remove('hidden');
                 localVideoPlayerEl.classList.add('hidden');
@@ -358,11 +356,9 @@
         function loadLocalVideo(event) {
             const file = event.target.files[0];
             if (file) {
-                if (!activePlayerType) { // 最初の読込時のみ
-                    activePlayerType = 'local';
-                    sourceSelectionArea.classList.add('hidden');
-                    playbackControls.classList.remove('hidden');
-                }
+                if (!activePlayerType) activePlayerType = 'local'; // 最初の読込時に設定
+                sourceSelectionArea.classList.add('hidden');
+                playbackControls.classList.remove('hidden');
                 playerPlaceholder.style.display = 'none';
                 localVideoFileName = file.name;
                 const fileURL = URL.createObjectURL(file);
@@ -423,10 +419,12 @@
                              loadYouTubeVideo();
                         } else if (activePlayerType === 'local') {
                              sourceSelectionArea.classList.remove('hidden');
-                             playbackControls.classList.add('hidden'); // 再選択されるまで再生ボタンは隠す
+                             // 再生コントロールを表示し、再選択を促す
+                             playbackControls.classList.add('hidden'); 
                              document.getElementById('local-file-name').textContent = `[読込済: ${localVideoFileName}] 再度同じファイルを選択してください。`;
                              document.getElementById('youtube-input-area').classList.add('hidden');
                              document.getElementById('source-separator').classList.add('hidden');
+                             sourceSelectionArea.classList.remove('hidden'); // ローカルファイル選択ボタンを再表示
                              ytPlayerEl.classList.add('hidden');
                              localVideoPlayerEl.classList.remove('hidden');
                              playerPlaceholder.style.display = 'block';
