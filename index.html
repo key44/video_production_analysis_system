@@ -120,10 +120,11 @@
                     </div>
 
                     <!-- 再生コントロール -->
-                    <div id="playback-controls" class="hidden flex items-center justify-between gap-4">
+                    <div id="playback-controls" class="hidden flex items-center justify-between gap-4 flex-wrap">
                          <div class="flex gap-2">
                             <button id="play-video" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">再生</button>
                             <button id="pause-video" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">一時停止</button>
+                            <button id="temp-play-btn" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">マーカー設置</button>
                         </div>
                         <div class="flex items-center gap-2">
                             <button id="skip-backward" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg transition duration-300">&lt;&lt;</button>
@@ -195,6 +196,7 @@
         // --- グローバル変数 ---
         let ytPlayer, localPlayer, taskChart;
         let activePlayerType = null;
+        let temporaryPlaybackTime = null; // 一時再生時間
         let tasks = [
             { name: '作業 A', color: 'blue', shortcut: 'a' }, { name: '作業 B', color: 'blue', shortcut: 's' },
             { name: '作業 C', color: 'green', shortcut: 'd' }, { name: '作業 D', color: 'green', shortcut: 'f' },
@@ -218,6 +220,7 @@
         const playbackControls = document.getElementById('playback-controls');
         const notificationBanner = document.getElementById('notification-banner');
         const graphTotalCountEl = document.getElementById('graph-total-count');
+        const tempPlayBtn = document.getElementById('temp-play-btn');
 
         // --- 初期化 ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -353,6 +356,7 @@
             document.getElementById('load-video').addEventListener('click', loadYouTubeVideo);
             document.getElementById('play-video').addEventListener('click', unifiedPlay);
             document.getElementById('pause-video').addEventListener('click', unifiedPause);
+            document.getElementById('temp-play-btn').addEventListener('click', handleTemporaryPlayback);
             document.getElementById('skip-backward').addEventListener('click', () => unifiedSkip(false));
             document.getElementById('skip-forward').addEventListener('click', () => unifiedSkip(true));
             taskButtonsContainer.addEventListener('click', handleTaskButtonClick);
@@ -431,15 +435,37 @@
             }, duration);
         }
 
+        function handleTemporaryPlayback() {
+            const currentTime = unifiedGetCurrentTime();
+            if (currentTime === null) { showTemporaryMessage('動画が読み込まれていません。'); return; }
+
+            if (temporaryPlaybackTime === null) {
+                temporaryPlaybackTime = currentTime;
+                tempPlayBtn.textContent = 'マーカーに戻る';
+                tempPlayBtn.classList.replace('bg-purple-500', 'bg-orange-500');
+                tempPlayBtn.classList.replace('hover:bg-purple-600', 'hover:bg-orange-600');
+                showTemporaryMessage('再生時間を記録しました。');
+            } else {
+                unifiedSeekTo(temporaryPlaybackTime);
+                resetTempPlayButton();
+                showTemporaryMessage('記録した再生時間に戻りました。');
+            }
+        }
+
+        function resetTempPlayButton() {
+            temporaryPlaybackTime = null;
+            tempPlayBtn.textContent = 'マーカー設置';
+            tempPlayBtn.classList.replace('bg-orange-500', 'bg-purple-500');
+            tempPlayBtn.classList.replace('hover:bg-orange-600', 'hover:bg-purple-600');
+        }
+
         function addTimestamp(taskName) {
             const currentTime = unifiedGetCurrentTime();
             if (currentTime === null) { showTemporaryMessage('動画が読み込まれていません。'); return; }
-            
             if (timestamps.some(ts => ts.time === currentTime)) {
                 showTemporaryMessage('この時間にはすでに登録されています。');
                 return;
             }
-
             const newTimestamp = { id: timestampIdCounter++, time: currentTime, task: taskName };
             timestamps.push(newTimestamp);
             timestamps.sort((a, b) => b.time - a.time);
@@ -476,6 +502,7 @@
             const videoID = extractVideoID(youtubeUrlInput.value);
             if (videoID) {
                 if (!activePlayerType) activePlayerType = 'youtube';
+                resetTempPlayButton();
                 sourceSelectionArea.classList.add('hidden');
                 playbackControls.classList.remove('hidden');
                 playerPlaceholder.style.display = 'none';
@@ -494,6 +521,7 @@
             const file = event.target.files[0];
             if (file) {
                 if (!activePlayerType) activePlayerType = 'local';
+                resetTempPlayButton();
                 sourceSelectionArea.classList.add('hidden');
                 playbackControls.classList.remove('hidden');
                 playerPlaceholder.style.display = 'none';
@@ -549,6 +577,7 @@
                     updateViews();
                     activePlayerType = d.activePlayerType;
                     if(activePlayerType) {
+                        resetTempPlayButton();
                         if (activePlayerType === 'youtube' && youtubeUrlInput.value) {
                              loadYouTubeVideo();
                         } else if (activePlayerType === 'local') {
