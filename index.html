@@ -122,15 +122,15 @@
                     <!-- 再生コントロール -->
                     <div id="playback-controls" class="hidden flex items-center justify-between gap-4 flex-wrap">
                          <div class="flex gap-2">
-                            <button id="play-video" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">再生</button>
-                            <button id="pause-video" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">一時停止</button>
-                            <button id="temp-play-btn" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">マーカー設置</button>
+                            <button id="play-video" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center gap-2">再生 <span class="bg-white/20 text-xs font-mono rounded px-1.5 py-0.5">Z</span></button>
+                            <button id="pause-video" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center gap-2">一時停止 <span class="bg-white/20 text-xs font-mono rounded px-1.5 py-0.5">X</span></button>
+                            <button id="temp-play-btn" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center gap-2">マーカー設置 <span class="bg-white/20 text-xs font-mono rounded px-1.5 py-0.5">C</span></button>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button id="skip-backward" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg transition duration-300">&lt;&lt;</button>
+                            <button id="skip-backward" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg transition duration-300 flex items-center gap-1">&lt;&lt; <span class="bg-white/20 text-xs font-mono rounded px-1.5 py-0.5">←</span></button>
                             <input type="number" id="skip-time" class="w-20 p-2 border border-gray-300 rounded-md text-center" value="10">
                             <span class="text-sm font-medium text-gray-600">秒</span>
-                            <button id="skip-forward" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg transition duration-300">&gt;&gt;</button>
+                            <button id="skip-forward" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg transition duration-300 flex items-center gap-1">&gt;&gt; <span class="bg-white/20 text-xs font-mono rounded px-1.5 py-0.5">→</span></button>
                         </div>
                     </div>
                 </div>
@@ -441,7 +441,7 @@
 
             if (temporaryPlaybackTime === null) {
                 temporaryPlaybackTime = currentTime;
-                tempPlayBtn.textContent = 'マーカーに戻る';
+                tempPlayBtn.innerHTML = 'マーカーに戻る <span class="bg-white/20 text-xs font-mono rounded px-1.5 py-0.5">C</span>';
                 tempPlayBtn.classList.replace('bg-purple-500', 'bg-orange-500');
                 tempPlayBtn.classList.replace('hover:bg-purple-600', 'hover:bg-orange-600');
                 showTemporaryMessage('再生時間を記録しました。');
@@ -454,7 +454,7 @@
 
         function resetTempPlayButton() {
             temporaryPlaybackTime = null;
-            tempPlayBtn.textContent = 'マーカー設置';
+            tempPlayBtn.innerHTML = 'マーカー設置 <span class="bg-white/20 text-xs font-mono rounded px-1.5 py-0.5">C</span>';
             tempPlayBtn.classList.replace('bg-orange-500', 'bg-purple-500');
             tempPlayBtn.classList.replace('hover:bg-orange-600', 'hover:bg-purple-600');
         }
@@ -477,10 +477,40 @@
             addTimestamp(button.dataset.taskName);
         }
         function handleGlobalKeyDown(event) {
-            if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || !editTasksModal.classList.contains('hidden')) return;
+            if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || !editTasksModal.classList.contains('hidden')) {
+                return;
+            }
+            
             const pressedKey = event.key.toLowerCase();
+            
+            switch (pressedKey) {
+                case 'z':
+                    event.preventDefault();
+                    unifiedPlay();
+                    return;
+                case 'x':
+                    event.preventDefault();
+                    unifiedPause();
+                    return;
+                case 'c':
+                    event.preventDefault();
+                    handleTemporaryPlayback();
+                    return;
+                case 'arrowleft':
+                    event.preventDefault();
+                    unifiedSkip(false);
+                    return;
+                case 'arrowright':
+                    event.preventDefault();
+                    unifiedSkip(true);
+                    return;
+            }
+
             const targetTask = tasks.find(task => task.shortcut && task.shortcut.toLowerCase() === pressedKey);
-            if (targetTask) { event.preventDefault(); addTimestamp(targetTask.name); }
+            if (targetTask) {
+                event.preventDefault();
+                addTimestamp(targetTask.name);
+            }
         }
         function handleTimestampListClick(event) {
             const target = event.target;
@@ -678,9 +708,34 @@
              modalList.appendChild(createTaskEditRow(newTask, tasks.length));
         }
         function saveTasksFromModal() {
-            const modalList = document.getElementById('modal-tasks-list');
+            const reservedKeys = ['z', 'x', 'c']; // システム予約キー
+            const usedShortcuts = new Set();
+            let validationError = false;
+
+            const rows = document.getElementById('modal-tasks-list').querySelectorAll('div[data-index]');
+            
+            for (const row of rows) {
+                const shortcutInput = row.querySelector('.modal-task-shortcut');
+                const shortcut = shortcutInput.value.trim().toLowerCase();
+                
+                if (!shortcut) continue;
+
+                if (reservedKeys.includes(shortcut)) {
+                    showTemporaryMessage(`「${shortcut}」はシステム予約キーのため使用できません。`);
+                    validationError = true;
+                    break;
+                }
+                if (usedShortcuts.has(shortcut)) {
+                    showTemporaryMessage(`ショートカット「${shortcut}」が重複しています。`);
+                    validationError = true;
+                    break;
+                }
+                usedShortcuts.add(shortcut);
+            }
+
+            if (validationError) return; // エラーがあれば保存しない
+
             const newTaskArray = [];
-            const rows = modalList.querySelectorAll('div[data-index]');
             rows.forEach(row => {
                 const nameInput = row.querySelector('.modal-task-name');
                 const shortcutInput = row.querySelector('.modal-task-shortcut');
