@@ -164,7 +164,7 @@
                         <ul id="timestamp-list" class="flex-grow overflow-y-auto divide-y divide-gray-200 mt-2 pr-2"></ul>
                     </div>
                     <!-- グラフ表示 -->
-                    <div id="graph-view" class="hidden flex-grow relative">
+                    <div id="graph-view" class="hidden flex-grow relative min-h-0">
                         <canvas id="task-chart"></canvas>
                     </div>
                 </div>
@@ -635,6 +635,9 @@
         // --- CSV出力 ---
         function exportToCsv() {
             if (timestamps.length === 0) { showTemporaryMessage('エクスポートするデータがありません。'); return; }
+            const title = projectTitleInput.value.trim() || '無題のプロジェクト';
+            const sanitizedTitle = title.replace(/[/\\?%*:|"<>]/g, '_');
+            
             timestamps.sort((a, b) => b.time - a.time);
             let csvContent = '"再生時間(HH:MM:SS)","作業内容"\n';
             timestamps.forEach(ts => {
@@ -645,7 +648,7 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'analysis-data.csv';
+            a.download = `${sanitizedTitle}.csv`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
