@@ -25,6 +25,10 @@ In contrast, this system is characterized by:
 - **Flexible data utilization**: Data can be exported in JSON and CSV formats for easy secondary analysis in Excel and similar tools
 - **Customizability**: Being open-source, modifications and improvements can be made to suit your organization's needs
 
+## Demo
+
+A live demo of the system is available at: https://key44.github.io/video_production_analysis_system/
+
 ### Ideal Use Cases
 
 - Understanding work time in new employee training
