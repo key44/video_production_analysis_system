@@ -1,5 +1,7 @@
 # Video Production Analysis System (VPAS)
 
+[🇬🇧 English](README.md) | [🇯🇵 日本語](README-jp.md)
+
 An open-source tool that records manufacturing operations on video and enables simple process analysis and work frequency visualization. It supports understanding of Muri (overburden), Muda (waste), and Mura (unevenness), while promoting process visualization for production improvement.
 
 ## System Features
@@ -192,3 +194,32 @@ Click the "New Project" button to reload the page and clear all records. Use thi
 - Mozilla Firefox (latest version)
 - Apple Safari (latest version)
 - Microsoft Edge (latest version)
+
+## Community & Feedback
+
+We welcome your feedback and use cases! This project aims to grow with the community while remaining a free, local-only tool.
+
+### Share Your Use Case
+How has this system helped your process analysis? We invite you to share your experiences and improvements in the **"Show and tell"** category of our [GitHub Discussions](https://github.com/key44/video_production_analysis_system/discussions). Your examples serve as great inspiration for other users!
+
+### Feature Requests & Bug Reports
+If you encounter any bugs or have ideas for new features, please submit them via [GitHub Issues](https://github.com/key44/video_production_analysis_system/issues). Use the provided templates for bug reports, or use the `enhancement` label for new feature ideas. We value practical feature suggestions that solve real-world production challenges.
+
+### Usage Survey
+To help us understand how the tool is being used and how we can improve it, please consider filling out our usage survey:
+👉 **[Usage Survey (Microsoft Forms)](https://forms.office.com/r/1NwG84MH9m)**
+
+- **Privacy & Data Security**: This system is designed so that NO data is ever sent externally automatically. Because of this, the survey is the *only* way the developer can learn how the tool is used.
+- **Anonymous & Voluntary**: The survey is completely anonymous. It does not ask for personal information such as your name or company name.
+- **Simple Question**: There is only one free-text field (in Japanese) asking for your usage case, good points, bad points, and areas for improvement.
+
+## Privacy & Security
+
+**External Data Transmission is 0%.**
+This application runs entirely completely locally within your browser. There is absolutely no telemetry, usage tracking, or background data collection mechanism. Your video files and analysis data never leave your local machine or network.
+
+## License
+
+This project is licensed under the **GPL-3.0 License**.
+
+You are free to use, modify, and distribute this software. However, under the GPL-3.0 terms, any derivative works or modified versions that you distribute must also be open-sourced under the same GPL-3.0 license. For the full legal text, please see the [LICENSE](LICENSE) file.

@@ -1,0 +1,37 @@
+name: 活用事例のシェア / Show and tell
+description: 現場での活用事例や改善効果の共有にご利用ください
+title: "[Case Study]: "
+category: Show and tell
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ご活用いただきありがとうございます！皆さまの事例がプロジェクトの大きな力になります。
+  - type: input
+    id: industry
+    attributes:
+      label: どのような工程・業種で使いましたか？
+      description: 例：自動車部品の組立工程、食品工場の検品作業 など
+    validations:
+      required: true
+  - type: textarea
+    id: improvements
+    attributes:
+      label: どのような改善効果がありましたか？
+      description: 定量的な効果（作業時間が〇%削減された等）や、定性的な効果（作業のムリ・ムダが分かりやすくなった等）を教えてください。
+    validations:
+      required: true
+  - type: textarea
+    id: desired_features
+    attributes:
+      label: 使ってみて欲しかった機能（任意）
+      description: 「こんな機能があればもっと活用できた」ということがあれば教えてください。
+    validations:
+      required: false
+  - type: textarea
+    id: media
+    attributes:
+      label: スクリーンショットや動画（任意）
+      description: 差し支えない範囲で、分析画面のスクリーンショットなどを共有していただけると嬉しいです。
+    validations:
+      required: false
